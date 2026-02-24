@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RK3576 机器人视觉 - 人脸跟踪 + 物品识别</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 2px solid #0f3460;
+            margin-bottom: 20px;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            color: #a0a0a0;
+            font-size: 1.1em;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 20px;
+        }
+        
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* 视频区域 */
+        .video-section {
+            background: #0f3460;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 75%; /* 4:3 比例 */
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .video-container img {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .video-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #666;
+        }
+        
+        .video-placeholder i {
+            font-size: 4em;
+            margin-bottom: 10px;
+        }
+        
+        /* 控制面板 */
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .panel-card {
+            background: #0f3460;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        .panel-card h3 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            border-bottom: 1px solid #1a1a2e;
+            padding-bottom: 10px;
+        }
+        
+        /* 状态显示 */
+        .status-display {
+            background: #1a1a2e;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+            font-size: 0.95em;
+        }
+        
+        .status-label {
+            color: #a0a0a0;
+        }
+        
+        .status-value {
+            color: #fff;
+            font-weight: bold;
+        }
+        
+        .status-value.active {
+            color: #4ecca3;
+        }
+        
+        .status-value.tracking {
+            color: #3498db;
+        }
+        
+        .status-value.detected {
+            color: #f39c12;
+        }
+        
+        /* 按钮样式 */
+        .button-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.95em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #e94560, #c73e54);
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(233, 69, 96, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #1a1a2e;
+            color: #fff;
+            border: 1px solid #0f3460;
+        }
+        
+        .btn-secondary:hover {
+            background: #16213e;
+        }
+        
+        .btn-action {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: #fff;
+        }
+        
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        
+        .btn-full {
+            grid-column: 1 / -1;
+        }
+        
+        /* 图例 */
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+        
+        .legend-color.face { background: #ff0000; }
+        .legend-color.food { background: #00ff00; }
+        .legend-color.learning { background: #0000ff; }
+        .legend-color.other { background: #00ffff; }
+        
+        /* 说明 */
+        .info-section {
+            background: #0f3460;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .info-section h3 {
+            color: #e94560;
+            margin-bottom: 15px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .info-card {
+            background: #1a1a2e;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .info-card h4 {
+            color: #3498db;
+            margin-bottom: 10px;
+            font-size: 1em;
+        }
+        
+        .info-card p {
+            color: #a0a0a0;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        
+        .info-card ul {
+            color: #a0a0a0;
+            font-size: 0.9em;
+            padding-left: 20px;
+        }
+        
+        .info-card li {
+            margin: 5px 0;
+        }
+        
+        /* 动画 */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .recording {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 RK3576 机器人视觉</h1>
+            <p>人脸跟踪 + 物品识别控制舵机</p>
+        </header>
+        
+        <div class="main-content">
+            <!-- 视频区域 -->
+            <div class="video-section">
+                <div class="video-container">
+                    <img id="videoStream" src="" alt="视频流" style="display: none;">
+                    <div id="videoPlaceholder" class="video-placeholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;">
+                        <div style="font-size: 3em; margin-bottom: 10px;">📷</div>
+                        <div id="videoStatus">Connecting to camera...</div>
+                        <div id="videoError" style="color: #e94560; margin-top: 10px; font-size: 0.9em; display: none;"></div>
+                    </div>
+                </div>
+                
+                <!-- 图例 -->
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color face"></div>
+                        <span>人脸 (跟踪)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color food"></div>
+                        <span>食物 → 点头</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color learning"></div>
+                        <span>学习用品 → 摇头</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color other"></div>
+                        <span>其他 → 转圈</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 控制面板 -->
+            <div class="control-panel">
+                <!-- 状态面板 -->
+                <div class="panel-card">
+                    <h3>📊 系统状态</h3>
+                    <div class="status-display">
+                        <div class="status-item">
+                            <span class="status-label">当前模式:</span>
+                            <span class="status-value" id="mode">待机</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">FPS:</span>
+                            <span class="status-value" id="fps">0</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">摄像头:</span>
+                            <span class="status-value" id="camera_status">检查中...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">检测器:</span>
+                            <span class="status-value" id="detector_status">检查中...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">舵机:</span>
+                            <span class="status-value" id="servo_status">检查中...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">状态信息:</span>
+                            <span class="status-value" id="message">等待目标...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 控制按钮 -->
+                <!-- 控制面板 -->
+                <div class="panel-card">
+                    <h3>🎮 控制面板</h3>
+                    <div class="button-group">
+                        <button class="btn btn-primary" onclick="sendCommand('center')">
+                            🎯 回中心
+                        </button>
+                        <button class="btn btn-secondary" onclick="sendCommand('reset')">
+                            🔄 重置跟踪
+                        </button>
+                        <button class="btn btn-secondary btn-full" onclick="sendCommand('toggle_detection')">
+                            👁️ 显示/隐藏检测框
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 动作测试 -->
+                <div class="panel-card">
+                    <h3>🎬 动作测试</h3>
+                    <div class="button-group">
+                        <button class="btn btn-action" onclick="sendCommand('action_nod')">
+                            ↕️ 点头
+                        </button>
+                        <button class="btn btn-action" onclick="sendCommand('action_shake')">
+                            ↔️ 摇头
+                        </button>
+                        <button class="btn btn-action btn-full" onclick="sendCommand('action_roll')">
+                            🔄 转圈
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 说明区域 -->
+        <div class="info-section">
+            <h3>📖 使用说明</h3>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h4>🎯 跟踪策略</h4>
+                    <ul>
+                        <li>优先跟踪人脸（蓝色框）</li>
+                        <li>无人脸时识别物品</li>
+                        <li>动作执行期间暂停跟踪</li>
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h4>🍎 物品响应</h4>
+                    <ul>
+                        <li>食物类 → 点头动作</li>
+                        <li>学习用品 → 摇头动作</li>
+                        <li>其他物品 → 转圈动作</li>
+                    </ul>
+                </div>
+                <div class="info-card">
+                    <h4>⚙️ 技术参数</h4>
+                    <ul>
+                        <li>输入尺寸: 320x320</li>
+                        <li>检测阈值: 0.5</li>
+                        <li>舵机范围: X±25°, Y±50°</li>
+                        <li>死区: 40像素</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 发送控制命令
+        async function sendCommand(action) {
+            console.log(`发送命令: ${action}`);
+            try {
+                const response = await fetch(`/api/control/${action}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+                console.log(`命令响应:`, data);
+                if (data.success) {
+                    // 在页面上显示反馈
+                    showMessage(data.message);
+                } else {
+                    console.error('命令失败:', data.message);
+                    showMessage('失败: ' + data.message, true);
+                }
+            } catch (error) {
+                console.error('发送命令失败:', error);
+                showMessage('网络错误: ' + error.message, true);
+            }
+        }
+        
+        // 显示消息提示
+        function showMessage(message, isError = false) {
+            const msgDiv = document.createElement('div');
+            msgDiv.textContent = message;
+            msgDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 15px 20px;
+                border-radius: 8px;
+                color: white;
+                font-weight: bold;
+                z-index: 10000;
+                background: ${isError ? '#e74c3c' : '#27ae60'};
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            `;
+            document.body.appendChild(msgDiv);
+            setTimeout(() => {
+                msgDiv.remove();
+            }, 3000);
+        }
+        
+        // 更新状态
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+
+                // 更新显示
+                const modeNames = {
+                    "idle": "待机",
+                    "face_tracking": "人脸跟踪",
+                    "face_lost": "人脸丢失",
+                    "food_detected": "检测到食物",
+                    "learning_detected": "检测到学习用品",
+                    "other_detected": "检测到其他",
+                    "action_pause": "动作执行中",
+                    "stopped": "已停止",
+                    "simulation": "模拟模式"
+                };
+
+                document.getElementById('mode').textContent = modeNames[data.mode] || data.mode;
+                document.getElementById('fps').textContent = data.fps || 0;
+                document.getElementById('message').textContent = data.message || '';
+
+                // 更新硬件状态
+                const camStatus = document.getElementById('camera_status');
+                if (data.simulation_mode) {
+                    camStatus.textContent = "模拟模式";
+                    camStatus.style.color = "#f39c12";
+                } else if (data.camera_connected) {
+                    camStatus.textContent = "已连接";
+                    camStatus.style.color = "#4ecca3";
+                } else {
+                    camStatus.textContent = "未连接";
+                    camStatus.style.color = "#e94560";
+                }
+
+                const detStatus = document.getElementById('detector_status');
+                if (data.detector_initialized) {
+                    detStatus.textContent = "就绪";
+                    detStatus.style.color = "#4ecca3";
+                } else {
+                    detStatus.textContent = "未初始化";
+                    detStatus.style.color = "#e94560";
+                }
+
+                const servoStatus = document.getElementById('servo_status');
+                if (data.servo_connected) {
+                    servoStatus.textContent = "已连接";
+                    servoStatus.style.color = "#4ecca3";
+                } else {
+                    servoStatus.textContent = "未连接";
+                    servoStatus.style.color = "#e94560";
+                }
+
+                // 根据模式设置颜色
+                const modeEl = document.getElementById('mode');
+                modeEl.className = 'status-value';
+                if (data.mode === 'face_tracking') {
+                    modeEl.classList.add('tracking');
+                } else if (data.mode.includes('detected')) {
+                    modeEl.classList.add('detected');
+                } else if (data.mode === 'idle') {
+                    modeEl.classList.add('active');
+                }
+
+            } catch (error) {
+                console.error('获取状态失败:', error);
+                // 显示离线状态
+                document.getElementById('mode').textContent = "离线";
+                document.getElementById('camera_status').textContent = "未知";
+                document.getElementById('detector_status').textContent = "未知";
+                document.getElementById('servo_status').textContent = "未知";
+            }
+        }
+        
+        // 定期更新状态
+        setInterval(updateStatus, 500);
+        
+        // 视频流管理
+        let videoRetryCount = 0;
+        const maxRetries = 10;
+        let isVideoConnected = false;
+
+        function startVideoStream() {
+            const img = document.getElementById('videoStream');
+            const placeholder = document.getElementById('videoPlaceholder');
+            const status = document.getElementById('videoStatus');
+            const errorDiv = document.getElementById('videoError');
+
+            if (videoRetryCount >= maxRetries) {
+                status.textContent = 'Failed to connect';
+                errorDiv.textContent = 'Max retries reached. Please refresh page.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            videoRetryCount++;
+            status.textContent = `Connecting... (attempt ${videoRetryCount}/${maxRetries})`;
+
+            // 测试连接
+            fetch('/api/status', { method: 'GET', cache: 'no-cache' })
+                .then(response => {
+                    if (!response.ok) throw new Error('Server not ready');
+                    return response.json();
+                })
+                .then(data => {
+                    // 服务器就绪，开始视频流
+                    img.src = '/video_feed?' + new Date().getTime();
+                    img.style.display = 'block';
+                    placeholder.style.display = 'none';
+                    isVideoConnected = true;
+                    videoRetryCount = 0;
+                    console.log('Video stream connected');
+                })
+                .catch(error => {
+                    console.log('Waiting for server...', error.message);
+                    status.textContent = `Waiting for server... (${videoRetryCount}/${maxRetries})`;
+                    setTimeout(startVideoStream, 1000);
+                });
+        }
+
+        // 处理视频流错误
+        function handleVideoError() {
+            if (!isVideoConnected) return;
+
+            console.error('Video stream error, reconnecting...');
+            isVideoConnected = false;
+
+            const img = document.getElementById('videoStream');
+            const placeholder = document.getElementById('videoPlaceholder');
+            const status = document.getElementById('videoStatus');
+
+            img.style.display = 'none';
+            placeholder.style.display = 'flex';
+            status.textContent = 'Connection lost, retrying...';
+
+            setTimeout(startVideoStream, 1000);
+        }
+
+        // 页面加载完成后启动视频流
+        document.addEventListener('DOMContentLoaded', function() {
+            const img = document.getElementById('videoStream');
+            img.onerror = handleVideoError;
+            img.onload = function() {
+                isVideoConnected = true;
+                videoRetryCount = 0;
+            };
+            startVideoStream();
+        });
+    </script>
+</body>
+</html>
