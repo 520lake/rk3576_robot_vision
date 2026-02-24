@@ -49,64 +49,111 @@
 
 ### 2.1 硬件架构
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    RK3576 开发板                            │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   NPU 单元   │  │   CPU 单元   │  │   摄像头     │      │
-│  │  YOLO推理    │  │  Flask服务   │  │  视频采集    │      │
-│  │  80类检测    │  │  Web界面     │  │  /dev/video0 │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│           │                │                │              │
-│           └────────────────┴────────────────┘              │
-│                            │                               │
-│                     ┌──────┴──────┐                        │
-│                     │  串口通信   │  /dev/ttyACM0          │
-│                     └──────┬──────┘  115200bps             │
-└────────────────────────────┼───────────────────────────────┘
-                             │
-                    ┌────────┴────────┐
-                    │  Arduino R4     │
-                    │   Minima        │
-                    │  ┌───────────┐  │
-                    │  │ X轴舵机   │  │  水平: 65°-115° (中心90°)
-                    │  │ (水平)    │  │  SG90/MG90S
-                    │  └───────────┘  │
-                    │  ┌───────────┐  │
-                    │  │ Y轴舵机   │  │  垂直: 40°-90° (中心50°)
-                    │  │ (垂直)    │  │  SG90/MG90S
-                    │  └───────────┘  │
-                    └─────────────────┘
+```mermaid
+graph TB
+    subgraph RK3576[📟 RK3576 开发板]
+        subgraph 处理单元
+            NPU[⚡ NPU单元<br/>YOLOv5推理<br/>80类目标检测]
+            CPU[💻 CPU单元<br/>Flask服务<br/>Web界面]
+        end
+        CAM[📷 摄像头<br/>/dev/video0<br/>640x480@30fps]
+        UART[🔌 串口通信<br/>/dev/ttyACM0<br/>115200bps]
+    end
+
+    subgraph Arduino[🔧 Arduino R4 Minima]
+        PWM1[⚙️ X轴舵机<br/>D9引脚<br/>水平65°-115°]
+        PWM2[⚙️ Y轴舵机<br/>D10引脚<br/>垂直40°-90°]
+    end
+
+    CAM --> |视频流| NPU
+    NPU --> |检测结果| CPU
+    CPU --> |控制指令| UART
+    UART --> |JSON协议| Arduino
+    Arduino --> PWM1
+    Arduino --> PWM2
+
+    style RK3576 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style Arduino fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style NPU fill:#fff8e1,stroke:#ffa000
+    style CPU fill:#e8f5e9,stroke:#388e3c
+    style CAM fill:#fce4ec,stroke:#c2185b
+    style UART fill:#f3e5f5,stroke:#7b1fa2
+    style PWM1 fill:#e0f2f1,stroke:#00796b
+    style PWM2 fill:#e0f2f1,stroke:#00796b
 ```
 
 ### 2.2 软件架构
 
+```mermaid
+graph TB
+    subgraph Web层[🌐 Flask Web 应用层]
+        API1[📹 /video_feed<br/>视频流接口]
+        API2[🎮 /api/control<br/>控制API接口]
+        API3[📊 /api/status<br/>状态API接口]
+    end
+
+    subgraph 逻辑层[🧠 核心控制逻辑层]
+        SYS[⚙️ RobotSystem<br/>主控制器<br/>初始化管理]
+        TRACK[🎯 ObjectTracker<br/>目标跟踪<br/>人脸优先策略]
+        SERVO[🔧 ServoController<br/>舵机控制<br/>动作序列执行]
+    end
+
+    subgraph 硬件层[🔌 硬件抽象层]
+        CAM[📷 Camera<br/>摄像头采集<br/>640x480]
+        DET[⚡ YOLODetector<br/>NPU检测器<br/>640x640]
+        SER[🔌 ServoCtrl<br/>串口通信<br/>JSON协议]
+    end
+
+    API1 --> |实时视频| SYS
+    API2 --> |控制命令| SYS
+    API3 --> |状态查询| SYS
+    SYS --> |目标位置| TRACK
+    TRACK --> |动作指令| SERVO
+    SYS --> CAM
+    SYS --> DET
+    SERVO --> SER
+
+    style Web层 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    style 逻辑层 fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    style 硬件层 fill:#fff3e0,stroke:#f57c00,stroke-width:2px
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Flask Web 应用层                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ 视频流接口   │  │ 控制API接口  │  │ 状态API接口  │      │
-│  │ /video_feed  │  │ /api/control │  │ /api/status  │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                    核心控制逻辑层                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  RobotSystem │  │ ObjectTracker│  │ ServoController      │
-│  │   主控制器   │  │   目标跟踪   │  │   舵机控制   │      │
-│  │  初始化管理  │  │  人脸优先    │  │  动作序列    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-┌─────────────────────────────────────────────────────────────┐
-│                    硬件抽象层                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │    Camera    │  │   YOLODet    │  │  ServoCtrl   │      │
-│  │   摄像头     │  │  NPU检测器   │  │  串口通信    │      │
-│  │  640x480     │  │  640x640     │  │  JSON协议    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-└─────────────────────────────────────────────────────────────┘
+
+### 2.3 数据流架构
+
+```mermaid
+sequenceDiagram
+    participant CAM as 📷 摄像头
+    participant DET as ⚡ NPU检测器
+    participant TRACK as 🎯 目标跟踪
+    participant LOGIC as 🧠 策略逻辑
+    participant SERVO as 🔧 舵机控制
+    participant WEB as 🌐 Web界面
+
+    rect rgb(227, 242, 253)
+        Note over CAM,WEB: 主循环流程
+        loop 每帧处理
+            CAM->>DET: 采集图像帧
+            DET->>TRACK: 返回检测结果<br/>[人脸/物品/无目标]
+            TRACK->>LOGIC: 目标位置(x, y)
+            LOGIC->>LOGIC: 优先级判断<br/>人脸 > 物品
+            alt 检测到目标
+                LOGIC->>SERVO: 计算PID控制量<br/>更新舵机角度
+                SERVO->>WEB: 返回执行状态
+            else 无目标
+                LOGIC->>SERVO: 保持当前位置<br/>或回中心
+            end
+            WEB->>WEB: 渲染视频流<br/>显示检测框
+        end
+    end
+
+    rect rgb(255, 243, 224)
+        Note over CAM,WEB: 动作触发流程
+        LOGIC->>LOGIC: 识别到特定物品<br/>[食物/学习用品/其他]
+        LOGIC->>SERVO: 执行对应动作<br/>点头/摇头/转圈
+        SERVO->>SERVO: 3秒动作执行
+        SERVO->>LOGIC: 动作完成
+        LOGIC->>SERVO: 回到中心位置
+    end
 ```
 
 ---
@@ -129,21 +176,55 @@
 
 #### 舵机接线图
 
+```mermaid
+graph LR
+    subgraph Arduino[🔌 Arduino R4 Minima]
+        D9[D9引脚]
+        D10[D10引脚]
+        V5[5V电源]
+        GND[地线GND]
+    end
+
+    subgraph X轴[⚙️ X轴舵机]
+        X_SIG[信号线<br/>🟧橙色]
+        X_VCC[正极<br/>🟥红色]
+        X_GND[负极<br/>🟫棕色]
+    end
+
+    subgraph Y轴[⚙️ Y轴舵机]
+        Y_SIG[信号线<br/>🟧橙色]
+        Y_VCC[正极<br/>🟥红色]
+        Y_GND[负极<br/>🟫棕色]
+    end
+
+    subgraph RK3576[📟 RK3576 开发板]
+        USB[USB Type-C接口]
+    end
+
+    D9 -->|PWM信号| X_SIG
+    D10 -->|PWM信号| Y_SIG
+    V5 -->|5V电源| X_VCC
+    V5 -->|5V电源| Y_VCC
+    GND -->|共地| X_GND
+    GND -->|共地| Y_GND
+    USB -.->|USB连接| Arduino
+
+    style Arduino fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    style X轴 fill:#e3f2fd,stroke:#1976d2
+    style Y轴 fill:#e8f5e9,stroke:#388e3c
+    style RK3576 fill:#fce4ec,stroke:#c2185b
 ```
-Arduino R4 Minima
-    ┌─────────┐
-    │         │
-    │    D9   │─────── X轴舵机信号线 (橙色/黄色)
-    │    D10  │─────── Y轴舵机信号线 (橙色/黄色)
-    │    5V   │─────── 舵机电源正极 (红色) ×2
-    │    GND  │─────── 舵机电源负极 (棕色/黑色) ×2
-    │         │
-    └────┬────┘
-         │
-    USB Type-C
-         │
-    RK3576 USB口
-```
+
+**接线对照表：**
+
+| Arduino引脚 | 连接对象 | 线缆颜色 | 功能说明 |
+|:-----------:|:--------:|:--------:|:---------|
+| D9 | X轴舵机信号线 | 🟧 橙色/黄色 | PWM信号控制 |
+| D10 | Y轴舵机信号线 | 🟧 橙色/黄色 | PWM信号控制 |
+| 5V | X轴舵机电源+ | 🟥 红色 | 5V电源供电 |
+| 5V | Y轴舵机电源+ | 🟥 红色 | 5V电源供电 |
+| GND | X轴舵机电源- | 🟫 棕色/黑色 | 地线共接 |
+| GND | Y轴舵机电源- | 🟫 棕色/黑色 | 地线共接 |
 
 #### 注意事项
 
