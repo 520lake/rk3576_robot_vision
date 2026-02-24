@@ -5,6 +5,17 @@
 
 ---
 
+## 💡 项目说明
+
+**本项目是学习 YOLO 目标检测和尝试使用 OpenClaw AI 功能开发的实践作品，目前仍处于半成品阶段，还有很多需要优化的地方。**
+
+- 🎓 **学习目的**：通过本项目深入学习 YOLO 模型部署、RKNN 量化、嵌入式 NPU 推理
+- 🤖 **AI 助手**：开发过程中使用 OpenClaw AI 辅助编程、调试和文档编写
+- 🚧 **当前状态**：基础功能已实现，但识别精度、跟踪稳定性、系统鲁棒性仍需提升
+- 💬 **欢迎反馈**：如果你有任何建议或改进意见，欢迎提 Issue 或 PR！
+
+---
+
 ## 📋 功能特点
 
 | 功能 | 说明 |
@@ -248,6 +259,16 @@ MIT License
 
 ---
 
-**项目地址**: `/home/myir/Desktop/rk3576_robot_vision`  
-**作者**: AI Assistant  
-**日期**: 2024-02-24
+## 🙏 致谢
+
+- **OpenClaw AI** - 开发过程中的智能助手，协助代码编写、调试和文档整理
+- **Rockchip** - 提供 RK3576 NPU SDK 和 RKNN 工具链
+- **YOLOv5** - Ultralytics 开源目标检测模型
+- **Arduino** - 开源硬件平台
+
+---
+
+**GitHub**: https://github.com/520lake/rk3576_robot_vision  
+**作者**: [520lake](https://github.com/520lake)  
+**创建日期**: 2026-02-24  
+**状态**: 🚧 持续优化中，欢迎 Star 和 PR！
