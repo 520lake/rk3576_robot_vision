@@ -10,7 +10,7 @@
 **本项目是学习 YOLO 目标检测和尝试使用 OpenClaw AI 功能开发的实践作品，目前仍处于半成品阶段，还有很多需要优化的地方。**
 
 - 🎓 **学习目的**：通过本项目深入学习 YOLO 模型部署、RKNN 量化、嵌入式 NPU 推理
-- 🤖 **AI 助手**：开发过程中使用 OpenClaw AI 辅助编程、调试和文档编写
+- 🤖 **AI 助手**：开发过程中使用 AI 辅助编程、调试和文档编写
 - 🔮 **OpenClaw 集成**：已实现简单指令转发，未来计划支持手机/Discord 远程控制，让 OpenClaw 自主规划任务（如"跟踪这个人直到他离开房间"）
 - 🚧 **当前状态**：基础功能已实现，但识别精度、跟踪稳定性、系统鲁棒性仍需提升
 - 💬 **欢迎反馈**：如果你有任何建议或改进意见，欢迎提 Issue 或 PR！
@@ -32,28 +32,93 @@
 
 ---
 
+## 🏗️ 系统架构
+
+```mermaid
+graph TB
+    subgraph 输入层
+        CAM[� USB摄像头]
+    end
+
+    subgraph RK3576核心处理层
+        subgraph 视觉处理
+            CAM --> |视频流| CAP[🎥 图像采集]
+            CAP --> |预处理| NPU[⚡ NPU推理<br/>YOLOv5 RKNN]
+            NPU --> |检测结果| TRACK[🎯 目标跟踪]
+        end
+
+        subgraph 决策控制
+            TRACK --> |目标位置| LOGIC[🧠 策略逻辑]
+            LOGIC --> |动作指令| SERVO[� 舵机控制]
+        end
+
+        subgraph Web服务
+            TRACK --> |可视化| WEB[🌐 Flask Web]
+            WEB --> |控制指令| LOGIC
+        end
+    end
+
+    subgraph 输出层
+        SERVO --> |串口通信| ARDUINO[🔌 Arduino]
+        ARDUINO --> PWM1[↔️ X轴舵机]
+        ARDUINO --> PWM2[↕️ Y轴舵机]
+        WEB --> |视频流| BROWSER[💻 浏览器]
+    end
+
+    subgraph 未来扩展
+        OPENCLAW[🤖 OpenClaw AI]
+        REMOTE[📱 远程控制]
+    end
+
+    LOGIC -.-> |待集成| OPENCLAW
+    WEB -.-> |待开发| REMOTE
+
+    style CAM fill:#e1f5fe
+    style NPU fill:#fff3e0
+    style TRACK fill:#e8f5e9
+    style LOGIC fill:#fce4ec
+    style SERVO fill:#f3e5f5
+    style WEB fill:#e0f2f1
+    style ARDUINO fill:#fff8e1
+    style OPENCLAW fill:#ffebee
+    style REMOTE fill:#ffebee
+```
+
 ## 🔧 硬件要求
 
 | 设备 | 型号/规格 | 数量 |
-|------|----------|------|
-| 开发板 | MYIR RK3576 | 1 |
-| 摄像头 | USB 摄像头 (≥640x480) | 1 |
-| Arduino | Arduino R4 Minima | 1 |
-| 舵机 | SG90/MG90S (X轴+Y轴) | 2 |
-| 云台 | 双轴舵机支架 | 1 |
-| 数据线 | USB Type-C | 2 |
+|:------|:----------|:------:|
+| 📟 开发板 | MYIR RK3576 | 1 |
+| 📷 摄像头 | USB 摄像头 (≥640x480) | 1 |
+| 🔌 Arduino | Arduino R4 Minima | 1 |
+| ⚙️ 舵机 | SG90/MG90S (X轴+Y轴) | 2 |
+| 🏗️ 云台 | 双轴舵机支架 | 1 |
+| 🔗 数据线 | USB Type-C | 2 |
 
-### 连接示意图
+### 硬件连接图
 
 ```
-RK3576 开发板
-    │ USB
-    ▼
-Arduino R4 Minima
-    ├── D9  ─── X轴舵机 (水平 65°-115°)
-    ├── D10 ─── Y轴舵机 (垂直 40°-90°)
-    ├── 5V  ─── 舵机电源
-    └── GND ─── 舵机地线
+┌─────────────────────────────────────────────────────────────┐
+│                      RK3576 开发板                           │
+│                                                             │
+│  ┌─────────────┐         USB 连接         ┌──────────────┐ │
+│  │   NPU 加速   │◄────────────────────────►│ Arduino R4   │ │
+│  │  YOLOv5推理  │                          │   Minima     │ │
+│  └─────────────┘                          └──────┬───────┘ │
+└──────────────────────────────────────────────────┼──────────┘
+                                                   │
+                          ┌────────────────────────┼────────────┐
+                          │                        │            │
+                          ▼                        ▼            ▼
+                    ┌──────────┐            ┌──────────┐  ┌──────────┐
+                    │ D9 (X轴) │            │ D10(Y轴) │  │ 5V + GND │
+                    └────┬─────┘            └────┬─────┘  └────┬─────┘
+                         │                       │             │
+                         ▼                       ▼             ▼
+                    ┌──────────┐            ┌──────────┐  ┌──────────┐
+                    │ X轴舵机  │            │ Y轴舵机  │  │   电源   │
+                    │ 65°-115° │            │ 40°-90°  │  │          │
+                    └──────────┘            └──────────┘  └──────────┘
 ```
 
 ---
@@ -262,7 +327,7 @@ MIT License
 
 ## 🙏 致谢
 
-- **OpenClaw AI** - 开发过程中的智能助手，协助代码编写、调试和文档整理
+- **AI 助手** - 开发过程中的智能助手，协助代码编写、调试和文档整理
 - **Rockchip** - 提供 RK3576 NPU SDK 和 RKNN 工具链
 - **YOLOv5** - Ultralytics 开源目标检测模型
 - **Arduino** - 开源硬件平台
