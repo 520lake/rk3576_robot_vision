@@ -375,53 +375,96 @@ pip install rknn-toolkit2==1.5.0
 #### 🔧 模型转换（重要！）
 
 **本项目模型来源：**
-由于经费限制，未购买预转换的 RKNN 模型，采用 **Windows 虚拟机 + RKNN-Toolkit2** 自行转换。
+由于经费限制，未购买预转换的 RKNN 模型，采用 **Ubuntu 虚拟机 + RKNN-Toolkit2** 自行转换。
 
-**转换步骤：**
+> 💡 **为什么使用虚拟机而不是 Windows？**
+> 
+> 本项目实际是在 **Ubuntu 虚拟机**（`/home/lake/rk_projects/`）中完成模型转换的，而非 Windows。以下是两种方案的对比：
 
-1. **在 Windows 上安装 RKNN-Toolkit2：**
+**方案对比：Windows vs Ubuntu 虚拟机**
+
+| 对比项 | Windows 本地 | Ubuntu 虚拟机（本项目采用） |
+|-------|-------------|------------------------|
+| **环境配置** | 需安装 Anaconda + Python | 原生支持 Python，apt 一键安装依赖 |
+| **RKNN-Toolkit2 安装** | `pip install` 可能遇到 DLL 依赖问题 | 直接 `pip install`，Linux 原生支持 |
+| **ONNX 导出** | 需先安装 PyTorch/Ultralytics | 同左，但 Linux 包管理更方便 |
+| **文件传输** | 需通过 WinSCP/FTP 传到开发板 | 虚拟机与开发板在同一网络，scp 直接传输 |
+| **开发一致性** | Windows 与 Linux 路径、换行符差异 | 与 RK3576 开发板同为 Linux 环境，一致性更好 |
+| **调试便利性** | 转换后需传到开发板测试 | 可在虚拟机中先用模拟器测试 RKNN 模型 |
+| **资源占用** | 占用宿主机资源 | 可灵活分配 CPU/内存，不影响宿主机 |
+
+**本项目选择的方案优势：**
+
+1. **环境一致性**：虚拟机与 RK3576 开发板同为 Linux（Ubuntu），避免跨平台路径、权限等问题
+2. **网络便利**：虚拟机与开发板在同一局域网，转换后的模型通过 `scp` 直接传输，无需 U 盘
+3. **依赖简单**：Linux 下 RKNN-Toolkit2 的依赖（如 NumPy、OpenCV）通过 apt/pip 安装更顺畅
+4. **可复现性**：虚拟机可导出为镜像，换电脑后导入即可复现完整环境
+5. **成本为零**：使用 VirtualBox/VMware 免费版，无需购买 Windows 授权
+
+**转换步骤（Ubuntu 虚拟机）：**
+
+1. **在虚拟机中安装 RKNN-Toolkit2：**
 ```bash
-# Windows 环境（Anaconda）
-conda create -n rknn python=3.9
-conda activate rknn
+# Ubuntu 虚拟机环境
+sudo apt update
+sudo apt install python3-pip python3-venv
+
+# 创建虚拟环境
+python3 -m venv ~/rknn_env
+source ~/rknn_env/bin/activate
+
+# 安装 RKNN-Toolkit2
 pip install rknn-toolkit2==1.5.0
 ```
 
-2. **下载 YOLOv5 ONNX 模型：**
+2. **准备 ONNX 模型：**
 ```python
-# 从 Ultralytics 导出 ONNX
+# 从 Ultralytics 导出 ONNX（可在虚拟机或开发板完成）
 from ultralytics import YOLO
 
 model = YOLO('yolov5s.pt')
 model.export(format='onnx', imgsz=640)
+# 输出：yolov5s.onnx
 ```
 
 3. **转换为 RKNN：**
 ```python
+# /home/lake/rk_projects/yolov5_rk3576/scripts/convert_yolov5_rk3576.py
 from rknn.api import RKNN
 
 rknn = RKNN()
 
-# 配置
-rknn.config(mean_values=[[0, 0, 0]],
-            std_values=[[255, 255, 255]],
-            target_platform='rk3576')
+# 配置（关键：必须先 config 再 load）
+rknn.config(target_platform='rk3576')
 
 # 加载 ONNX
 rknn.load_onnx(model='yolov5s.onnx')
 
-# 构建模型
+# 构建模型（INT8 量化）
 rknn.build(do_quantization=True, dataset='dataset.txt')
 
 # 导出 RKNN
 rknn.export_rknn('yolov5s_rk3576.rknn')
 ```
 
-4. **复制到开发板：**
+4. **传输到开发板：**
 ```bash
-# 通过 scp 或 U 盘复制
-scp yolov5s_rk3576.rknn myir@192.168.1.100:~/rk3576_robot_vision/models/
+# 虚拟机与开发板在同一网络，直接 scp
+scp yolov5s_rk3576.rknn myir@192.168.1.100:/home/myir/Desktop/rk3576_robot_vision/models/
+
+# 或使用共享文件夹、U盘等方式
 ```
+
+**常见问题：**
+
+- **Q: 虚拟机性能不足？**  
+  A: 分配 4GB 内存 + 2 核 CPU 即可流畅运行转换，RKNN-Toolkit2 对 GPU 无要求
+
+- **Q: 没有 Ubuntu 虚拟机？**  
+  A: 可使用 Windows WSL2（Windows Subsystem for Linux），效果类似
+
+- **Q: 转换后模型在开发板上运行慢？**  
+  A: 检查 `target_platform` 是否为 `'rk3576'`，以及是否启用了 INT8 量化
 
 #### 模型文件放置
 
@@ -2196,6 +2239,7 @@ rk3576_robot_vision/
 - [RK3576 开发板资料](https://www.myir.cn/shows/118/66.html) - 米尔电子官方资料
 - [Mermaid 语法](https://mermaid.js.org/) - 流程图绘制工具
 - [OpenCV Python 教程](https://docs.opencv.org/4.x/d6/d00/tutorial_py_root.html) - 计算机视觉库
+- [OpenClaw AI](https://openclaw.ai/) - AI 辅助编程学习平台（本项目开发过程中使用）
 
 **社区支持：**
 - [GitHub Issues](https://github.com/520lake/rk3576_robot_vision/issues) - 项目问题反馈
